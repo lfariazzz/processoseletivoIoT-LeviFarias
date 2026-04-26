@@ -2,6 +2,39 @@
   "version": 1,
   "author": "Uri Shaked",
   "editor": "wokwi",
-  "parts": [ { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} } ],
-  "connections": [ [ "esp:TX", "$serialMonitor:RX", "", [] ], [ "esp:RX", "$serialMonitor:TX", "", [] ] ]
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_green", "top": -80, "left": -120, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "led_red", "top": -80, "left": -60, "attrs": { "color": "red" } },
+    { "type": "wokwi-led", "id": "led_yellow", "top": -80, "left": 0, "attrs": { "color": "yellow" } },
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 100, "left": -150, "attrs": { "color": "green", "label": "F1" } },
+    { "type": "wokwi-pushbutton", "id": "btn2", "top": 100, "left": -80, "attrs": { "color": "green", "label": "F2" } },
+    { "type": "wokwi-pushbutton", "id": "btn3", "top": 100, "left": -10, "attrs": { "color": "red", "label": "RST" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": -80, "left": 80, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+
+    [ "led_green:A", "esp:GPIO21", "green", [] ],
+    [ "led_green:K", "esp:GND.1", "black", [] ],
+
+    [ "led_red:A", "esp:GPIO19", "red", [] ],
+    [ "led_red:K", "esp:GND.1", "black", [] ],
+
+    [ "led_yellow:A", "esp:GPIO18", "yellow", [] ],
+    [ "led_yellow:K", "esp:GND.1", "black", [] ],
+
+    [ "btn1:1.l", "esp:GPIO13", "green", [] ],
+    [ "btn1:2.l", "esp:GND.2", "black", [] ],
+
+    [ "btn2:1.l", "esp:GPIO12", "green", [] ],
+    [ "btn2:2.l", "esp:GND.2", "black", [] ],
+
+    [ "btn3:1.l", "esp:GPIO14", "red", [] ],
+    [ "btn3:2.l", "esp:GND.2", "black", [] ],
+
+    [ "buzzer:1", "esp:GPIO26", "purple", [] ],
+    [ "buzzer:2", "esp:GND.2", "black", [] ]
+  ]
 }
