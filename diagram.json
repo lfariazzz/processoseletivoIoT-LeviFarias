@@ -13,28 +13,28 @@
     { "type": "wokwi-buzzer", "id": "buzzer", "top": -80, "left": 80, "attrs": {} }
   ],
   "connections": [
-    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
-    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
 
-    [ "led_green:A", "esp:GPIO21", "green", [] ],
+    [ "led_green:A", "esp:21", "green", [] ],
     [ "led_green:C", "esp:GND.1", "black", [] ],
 
-    [ "led_red:A", "esp:GPIO19", "red", [] ],
+    [ "led_red:A", "esp:19", "red", [] ],
     [ "led_red:C", "esp:GND.1", "black", [] ],
 
-    [ "led_yellow:A", "esp:GPIO18", "yellow", [] ],
+    [ "led_yellow:A", "esp:18", "yellow", [] ],
     [ "led_yellow:C", "esp:GND.1", "black", [] ],
 
-    [ "btn1:1.l", "esp:GPIO13", "green", [] ],
+    [ "btn1:1.l", "esp:13", "green", [] ],
     [ "btn1:2.r", "esp:GND.2", "black", [] ],
 
-    [ "btn2:1.l", "esp:GPIO12", "green", [] ],
+    [ "btn2:1.l", "esp:12", "green", [] ],
     [ "btn2:2.r", "esp:GND.2", "black", [] ],
 
-    [ "btn3:1.l", "esp:GPIO14", "red", [] ],
+    [ "btn3:1.l", "esp:14", "red", [] ],
     [ "btn3:2.r", "esp:GND.2", "black", [] ],
 
-    [ "buzzer:1", "esp:GPIO26", "purple", [] ],
+    [ "buzzer:1", "esp:26", "purple", [] ],
     [ "buzzer:2", "esp:GND.2", "black", [] ]
   ]
 }
