@@ -103,6 +103,19 @@ def botao_pressionado(pino):
             return True
     return False
 
+# Proteção contra força bruta:
+# Após MAX_TENTATIVAS falhas consecutivas, o sistema bloqueia por TEMPO_BLOQUEIO_MS milissegundos antes de aceitar novas tentativas.
+# O contador só é zerado após autenticação bem-sucedida ou reset manual.
+
+def verificar_bloqueio():
+    if tentativas >= MAX_TENTATIVAS:
+        feedback_bloqueado()
+        transitar(BLOQUEADO)
+        return True
+    restantes = MAX_TENTATIVAS - tentativas
+    print(f"Tentativas restantes: {restantes}")
+    return False
+
 print("Iniciando loop principal...")
 
 while True:
@@ -119,16 +132,9 @@ while True:
         led_yellow.on()
         if botao_pressionado(btn_f2):
             tentativas += 1
-            if tentativas <= MAX_TENTATIVAS:
+            if not verificar_bloqueio():
                 feedback_aprovado()
                 transitar(APROVADO)
-            else:
-                feedback_bloqueado()
-                transitar(BLOQUEADO)
-        elif ticks_diff(ticks_ms(), tempo_inicio) > TIMEOUT_F2_MS:
-            feedback_negado()
-            print("Tempo esgotado.")
-            transitar(EXPIRADO)
 
     # Status aprovado
     elif estado_atual == APROVADO:
