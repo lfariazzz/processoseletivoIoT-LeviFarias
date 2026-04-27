@@ -85,3 +85,72 @@ def feedback_desbloqueado():
     print("Sistema desbloqueado. Aguardando...")
 
 print("Funcoes de feedback carregadas.")
+
+# Loop principal — máquina de estados 
+
+def transitar(novo_estado):
+    global estado_atual, tempo_inicio
+    estado_atual = novo_estado
+    tempo_inicio = ticks_ms()
+    print(f"Estado: {novo_estado}")
+
+def botao_pressionado(pino):
+    global ultimo_botao
+    agora = ticks_ms()
+    if pino.value() == 0:
+        if ticks_diff(agora, ultimo_botao) > DEBOUNCE_MS:
+            ultimo_botao = agora
+            return True
+    return False
+
+print("Iniciando loop principal...")
+
+while True:
+
+    # Aguarda início
+    if estado_atual == IDLE:
+        todos_leds_off()
+        if botao_pressionado(btn_f1):
+            feedback_aguardando()
+            transitar(FATOR1)
+
+    # Fator 1 — aguardando fator 2 dentro do tempo 
+    elif estado_atual == FATOR1:
+        led_yellow.on()
+        if botao_pressionado(btn_f2):
+            tentativas += 1
+            if tentativas <= MAX_TENTATIVAS:
+                feedback_aprovado()
+                transitar(APROVADO)
+            else:
+                feedback_bloqueado()
+                transitar(BLOQUEADO)
+        elif ticks_diff(ticks_ms(), tempo_inicio) > TIMEOUT_F2_MS:
+            feedback_negado()
+            print("Tempo esgotado.")
+            transitar(EXPIRADO)
+
+    # Status aprovado
+    elif estado_atual == APROVADO:
+        if ticks_diff(ticks_ms(), tempo_inicio) > 3000:
+            tentativas = 0
+            transitar(IDLE)
+
+    # Status Expirado - Timeout
+    elif estado_atual == EXPIRADO:
+        if ticks_diff(ticks_ms(), tempo_inicio) > 2000:
+            transitar(IDLE)
+
+    # Status bloqueado - Aguarda tempo de bloqueio
+    elif estado_atual == BLOQUEADO:
+        if ticks_diff(ticks_ms(), tempo_inicio) > TEMPO_BLOQUEIO_MS:
+            tentativas = 0
+            feedback_desbloqueado()
+            transitar(IDLE)
+
+    # Reset Manual
+    if botao_pressionado(btn_rst):
+        buzzer.duty(0)
+        tentativas = 0
+        print("Reset manual.")
+        transitar(IDLE)
