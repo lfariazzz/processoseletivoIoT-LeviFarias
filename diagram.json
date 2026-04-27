@@ -3,7 +3,7 @@
   "author": "PNAAT",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
     { "type": "wokwi-led", "id": "led_green", "top": -80, "left": -120, "attrs": { "color": "green" } },
     { "type": "wokwi-led", "id": "led_red", "top": -80, "left": -60, "attrs": { "color": "red" } },
     { "type": "wokwi-led", "id": "led_yellow", "top": -80, "left": 0, "attrs": { "color": "yellow" } },
@@ -16,25 +16,25 @@
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
     [ "esp:RX", "$serialMonitor:TX", "", [] ],
 
-    [ "led_green:A", "esp:GPIO21", "green", [] ],
+    [ "led_green:A", "esp:D21", "green", [] ],
     [ "led_green:C", "esp:GND.1", "black", [] ],
 
-    [ "led_red:A", "esp:GPIO19", "red", [] ],
+    [ "led_red:A", "esp:D19", "red", [] ],
     [ "led_red:C", "esp:GND.1", "black", [] ],
 
-    [ "led_yellow:A", "esp:GPIO18", "yellow", [] ],
+    [ "led_yellow:A", "esp:D18", "yellow", [] ],
     [ "led_yellow:C", "esp:GND.1", "black", [] ],
 
-    [ "btn1:1.l", "esp:GPIO13", "green", [] ],
-    [ "btn1:2.l", "esp:GND.2", "black", [] ],
+    [ "btn1:1.l", "esp:D13", "green", [] ],
+    [ "btn1:2.r", "esp:GND.2", "black", [] ],
 
-    [ "btn2:1.l", "esp:GPIO12", "green", [] ],
-    [ "btn2:2.l", "esp:GND.2", "black", [] ],
+    [ "btn2:1.l", "esp:D12", "green", [] ],
+    [ "btn2:2.r", "esp:GND.2", "black", [] ],
 
-    [ "btn3:1.l", "esp:GPIO14", "red", [] ],
-    [ "btn3:2.l", "esp:GND.2", "black", [] ],
+    [ "btn3:1.l", "esp:D14", "red", [] ],
+    [ "btn3:2.r", "esp:GND.2", "black", [] ],
 
-    [ "buzzer:1", "esp:GPIO26", "purple", [] ],
+    [ "buzzer:1", "esp:D26", "purple", [] ],
     [ "buzzer:2", "esp:GND.2", "black", [] ]
   ]
 }
