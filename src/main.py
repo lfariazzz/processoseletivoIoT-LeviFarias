@@ -28,7 +28,6 @@ DEBOUNCE_MS       = 200    # debounce dos botões
 #Estados
 IDLE      = "IDLE"
 FATOR1    = "FATOR1"
-FATOR2    = "FATOR2"
 APROVADO  = "APROVADO"
 EXPIRADO  = "EXPIRADO"
 BLOQUEADO = "BLOQUEADO"
