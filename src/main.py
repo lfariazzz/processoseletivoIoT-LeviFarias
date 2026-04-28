@@ -5,6 +5,7 @@ from machine import Pin
 from utime import sleep_ms
 from utils import btn_f1, btn_f2, btn_rst
 import modulo_2fa
+import modulo_ids
 
 print("Teste")
 print("=" * 40)
@@ -32,7 +33,7 @@ btn_f1.irq(trigger=Pin.IRQ_FALLING, handler=isr_f1)
 btn_f2.irq(trigger=Pin.IRQ_FALLING, handler=isr_f2)
 btn_rst.irq(trigger=Pin.IRQ_FALLING, handler=isr_rst)
 
-print("Modulos carregados: 2FA")
+print("Modulos carregados: 2FA, IDS")
 print("Sistema pronto. Pressione F1 para iniciar autenticacao.")
 print("Iniciando loop principal...")
 
@@ -50,11 +51,20 @@ while True:
     if flag_rst:
         flag_rst = False
         modulo_2fa.on_reset()
+        modulo_ids.desarmar()
 
     # Atualizar máquina de estados do 2FA
     autenticado = modulo_2fa.atualizar()
 
     if autenticado:
-        print("[SISTEMA] Autenticacao concluida com sucesso.")
+        print("[SISTEMA] Autenticacao concluida. Armando IDS...")
+        modulo_ids.armar()
+
+    # Atualizar máquina de estados do IDS
+    lockdown = modulo_ids.atualizar()
+
+    if lockdown:
+        print("[SISTEMA] LOCKDOWN! Re-autenticacao necessaria.")
+        modulo_2fa.on_reset()
 
     sleep_ms(10)

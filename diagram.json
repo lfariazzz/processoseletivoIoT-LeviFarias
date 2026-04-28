@@ -10,7 +10,10 @@
     { "type": "wokwi-pushbutton", "id": "btn1", "top": 150, "left": -150, "attrs": { "color": "green", "label": "F1" } },
     { "type": "wokwi-pushbutton", "id": "btn2", "top": 150, "left": -80, "attrs": { "color": "green", "label": "F2" } },
     { "type": "wokwi-pushbutton", "id": "btn3", "top": 150, "left": -10, "attrs": { "color": "red", "label": "RST" } },
-    { "type": "wokwi-buzzer", "id": "buzzer", "top": -80, "left": 80, "attrs": {} }
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": -80, "left": 80, "attrs": {} },
+    { "type": "wokwi-pir-motion-sensor", "id": "pir", "top": 150, "left": 100, "attrs": {} },
+    { "type": "wokwi-photoresistor-sensor", "id": "ldr", "top": 150, "left": 200, "attrs": {} },
+    { "type": "wokwi-led", "id": "led_blue", "top": -80, "left": 160, "attrs": { "color": "blue" } }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
@@ -35,6 +38,17 @@
     [ "btn3:2.r", "esp:GND.2", "black", [] ],
 
     [ "buzzer:1", "esp:26", "purple", [] ],
-    [ "buzzer:2", "esp:GND.2", "black", [] ]
+    [ "buzzer:2", "esp:GND.2", "black", [] ],
+
+    [ "pir:OUT", "esp:27", "orange", [] ],
+    [ "pir:VCC", "esp:3V3", "red", [] ],
+    [ "pir:GND", "esp:GND.2", "black", [] ],
+
+    [ "ldr:VCC", "esp:3V3", "red", [] ],
+    [ "ldr:GND", "esp:GND.2", "black", [] ],
+    [ "ldr:AO", "esp:34", "yellow", [] ],
+
+    [ "led_blue:A", "esp:5", "blue", [] ],
+    [ "led_blue:C", "esp:GND.1", "black", [] ]
   ]
 }
