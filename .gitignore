@@ -1,1 +1,20 @@
+# Ambiente
 .env
+
+# Arquivos gerados pelo CI/Docker
+fs.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# VS Code
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Wokwi license
+*.wokwi-token
