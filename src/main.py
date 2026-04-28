@@ -1,7 +1,7 @@
 # Sistema de Autenticação de 2 Fatotes robusto - com Proteção contra Força Bruta
 
 from machine import Pin, PWM
-from utime import ticks_ms, ticks_diff
+from utime import ticks_ms, ticks_diff, sleep_ms
 
 print("Teste")
 print("=" * 40)
@@ -90,18 +90,10 @@ print("Funcoes de feedback carregadas.")
 
 def transitar(novo_estado):
     global estado_atual, tempo_inicio
+    todos_leds_off()
     estado_atual = novo_estado
     tempo_inicio = ticks_ms()
     print(f"Estado: {novo_estado}")
-
-def botao_pressionado(pino):
-    global ultimo_botao
-    agora = ticks_ms()
-    if pino.value() == 0:
-        if ticks_diff(agora, ultimo_botao) > DEBOUNCE_MS:
-            ultimo_botao = agora
-            return True
-    return False
 
 # Proteção contra força bruta:
 # Após MAX_TENTATIVAS falhas consecutivas, o sistema bloqueia por TEMPO_BLOQUEIO_MS milissegundos antes de aceitar novas tentativas.
@@ -116,30 +108,68 @@ def verificar_bloqueio():
     print(f"Tentativas restantes: {restantes}")
     return False
 
+# Flags de botões via interrupção 
+flag_f1  = False
+flag_f2  = False
+flag_rst = False
+
+def isr_f1(pin):
+    global flag_f1
+    flag_f1 = True
+
+def isr_f2(pin):
+    global flag_f2
+    flag_f2 = True
+
+def isr_rst(pin):
+    global flag_rst
+    flag_rst = True
+
+btn_f1.irq(trigger=Pin.IRQ_FALLING, handler=isr_f1)
+btn_f2.irq(trigger=Pin.IRQ_FALLING, handler=isr_f2)
+btn_rst.irq(trigger=Pin.IRQ_FALLING, handler=isr_rst)
+
 print("Iniciando loop principal...")
 
 while True:
 
     # Aguarda início
-    if estado_atual == IDLE:
-        todos_leds_off()
-        if botao_pressionado(btn_f1):
+    if flag_f1:
+        flag_f1 = False
+        if estado_atual == IDLE:
             feedback_aguardando()
             transitar(FATOR1)
 
-    # Fator 1 — aguardando fator 2 dentro do tempo 
-    elif estado_atual == FATOR1:
-        led_yellow.on()
-        if botao_pressionado(btn_f2):
+    # Fator 1 — aguardando fator 2 dentro do tempo
+    if flag_f2:
+        flag_f2 = False
+        if estado_atual == FATOR1:
             tentativas += 1
             if not verificar_bloqueio():
                 feedback_aprovado()
                 transitar(APROVADO)
 
+    # Reset Manual
+    if flag_rst:
+        flag_rst = False
+        buzzer.duty(0)
+        tentativas = 0
+        print("Reset manual.")
+        transitar(IDLE)
+
+    # Fator 1 — LED amarelo piscando enquanto aguarda fator 2
+    if estado_atual == FATOR1:
+        led_yellow.on()
+        if ticks_diff(ticks_ms(), tempo_inicio) > TIMEOUT_F2_MS:
+            tentativas += 1
+            feedback_negado()
+            print("Tempo esgotado.")
+            if not verificar_bloqueio():
+                transitar(EXPIRADO)
+
     # Status aprovado
     elif estado_atual == APROVADO:
         if ticks_diff(ticks_ms(), tempo_inicio) > 3000:
-            tentativas = 0
             transitar(IDLE)
 
     # Status Expirado - Timeout
@@ -154,9 +184,4 @@ while True:
             feedback_desbloqueado()
             transitar(IDLE)
 
-    # Reset Manual
-    if botao_pressionado(btn_rst):
-        buzzer.duty(0)
-        tentativas = 0
-        print("Reset manual.")
-        transitar(IDLE)
+    sleep_ms(10)
