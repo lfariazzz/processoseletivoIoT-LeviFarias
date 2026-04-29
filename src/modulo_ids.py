@@ -5,6 +5,7 @@ from machine import Pin, ADC
 from utime import ticks_ms, ticks_diff
 from utils import led_green, led_red, led_yellow, buzzer
 from utils import todos_leds_off, beep
+import log
 
 #Pinos - Sensores e LED do IDS
 sensor_pir = Pin(27, Pin.IN)
@@ -132,6 +133,7 @@ def parar_alarme():
 
 def armar():
     # Chamado pelo orquestrador quando a autenticação 2FA é concluída
+    log.registrar("IDS_ARMADO")
     feedback_armando()
     calibrar_ldr()
     transitar(ARMANDO)
@@ -144,6 +146,7 @@ def desarmar():
     ultimo_feedback = 0
     led_blue.off()
     buzzer.duty(0)
+    log.registrar("IDS_DESARMADO")
     transitar(DESARMADO)
     feedback_desarmado()
 
@@ -171,8 +174,10 @@ def atualizar():
 
             # Transita para o nível de ameaça detectado
             if ameaca == ALERTA and estado_atual != ALERTA:
+                log.registrar("IDS_ALERTA", "movimento + variacao de luz")
                 transitar(ALERTA)
             elif ameaca == AVISO and estado_atual == VIGILANCIA:
+                log.registrar("IDS_AVISO", "movimento detectado")
                 transitar(AVISO)
         else:
             # Sem ameaça — volta para vigilância normal se estava em AVISO
@@ -193,6 +198,7 @@ def atualizar():
 
         if ameaca == ALERTA:
             print("[IDS] Ameaca escalou: movimento + luz anormal")
+            log.registrar("IDS_ALERTA", "escalonado de AVISO")
             feedback_alerta()
             transitar(ALERTA)
         elif not ameaca:
@@ -215,6 +221,7 @@ def atualizar():
         if anomalia_ativa and ticks_diff(ticks_ms(), tempo_anomalia) > TEMPO_ESCALACAO_MS:
             print("[IDS] Ameaca persistente! Escalando para CRITICO.")
             print("[IDS] !!! INTRUSAO CONFIRMADA !!!")
+            log.registrar("IDS_CRITICO", "intrusao confirmada")
             feedback_critico()
             transitar(CRITICO)
         elif not ameaca:
@@ -234,6 +241,8 @@ def atualizar():
         # Escalação: CRITICO persistente > 10s → LOCKDOWN
         if ticks_diff(ticks_ms(), tempo_anomalia) > TEMPO_LOCKDOWN_MS:
             print("[IDS] LOCKDOWN ATIVADO! Re-autenticacao necessaria.")
+            log.registrar("IDS_LOCKDOWN", "intrusao nao resolvida")
+            log.imprimir_log()
             buzzer.duty(0)
             transitar(LOCKDOWN)
             return True

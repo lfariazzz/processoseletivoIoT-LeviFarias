@@ -4,6 +4,7 @@
 from utime import ticks_ms, ticks_diff
 from utils import led_green, led_red, led_yellow, buzzer
 from utils import todos_leds_off, beep
+import log
 
 #Constantes
 TIMEOUT_F2_MS     = 5000   # janela de tempo para o fator 2 (5 segundos)
@@ -69,6 +70,7 @@ def transitar(novo_estado):
 def verificar_bloqueio():
     global tentativas
     if tentativas >= MAX_TENTATIVAS:
+        log.registrar("2FA_BLOQUEADO", f"{tentativas} tentativas falhas")
         feedback_bloqueado()
         transitar(BLOQUEADO)
         return True
@@ -95,6 +97,7 @@ def on_reset():
     global tentativas
     buzzer.duty(0)
     tentativas = 0
+    log.registrar("2FA_RESET")
     print("Reset manual.")
     transitar(IDLE)
 
@@ -112,12 +115,14 @@ def atualizar():
             tentativas += 1
             feedback_negado()
             print("Tempo esgotado.")
+            log.registrar("2FA_EXPIRADO", f"tentativa {tentativas}")
             if not verificar_bloqueio():
                 transitar(EXPIRADO)
 
     # Status aprovado — aguarda 3s e sinaliza conclusão
     elif estado_atual == APROVADO:
         if ticks_diff(ticks_ms(), tempo_inicio) > 3000:
+            log.registrar("2FA_AUTENTICADO")
             transitar(IDLE)
             return True
 

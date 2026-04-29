@@ -9,6 +9,7 @@ WORKDIR "/"
 # RUN mkdir -p /fs
 COPY src/main.py /main.py
 COPY src/utils.py /utils.py
+COPY src/log.py /log.py
 COPY src/modulo_2fa.py /modulo_2fa.py
 COPY src/modulo_ids.py /modulo_ids.py
 # COPY boot.py /boot.py
@@ -23,6 +24,7 @@ RUN cd mklittlefs && \
   mkdir -p ~/fs && \
   cp /main.py ~/fs/main.py && \
   cp /utils.py ~/fs/utils.py && \
+  cp /log.py ~/fs/log.py && \
   cp /modulo_2fa.py ~/fs/modulo_2fa.py && \
   cp /modulo_ids.py ~/fs/modulo_ids.py && \
   #  cp /boot.py ~/fs/boot.py && \
