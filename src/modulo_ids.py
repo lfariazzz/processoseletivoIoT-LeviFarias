@@ -25,10 +25,12 @@ ALERTA      = "ALERTA"
 CRITICO     = "CRITICO"
 LOCKDOWN    = "LOCKDOWN"
 
-#Variáveis
-estado_atual   = DESARMADO
-tempo_inicio   = 0
-ldr_baseline   = 0
+#Variáveis de estado
+estado_atual      = DESARMADO
+tempo_inicio      = 0
+ldr_baseline      = 0
+tempo_anomalia    = 0     # quando a anomalia começou (para escalação)
+anomalia_ativa    = False # se há anomalia em curso
 
 #Calibração do LDR — lê 10 amostras e calcula a média como referência
 def calibrar_ldr():
@@ -38,6 +40,34 @@ def calibrar_ldr():
         soma += sensor_ldr.read()
     ldr_baseline = soma // 10
     print(f"[IDS] LDR calibrado: baseline = {ldr_baseline}")
+
+#Leitura dos sensores
+def ler_pir():
+    # PIR retorna 1 (HIGH) quando detecta movimento
+    return sensor_pir.value() == 1
+
+def ler_ldr():
+    # Compara leitura atual com o baseline calibrado
+    # Retorna True se a variação exceder o limiar percentual
+    leitura = sensor_ldr.read()
+    if ldr_baseline == 0:
+        return False
+    variacao = abs(leitura - ldr_baseline) * 100 // ldr_baseline
+    return variacao > LIMIAR_LDR_PERCENT
+
+#Fusão de sensores — determina nível de ameaça combinando PIR e LDR
+# Movimento isolado (PIR) = pode ser falso positivo (vento, animal)
+# Movimento + variação de luz (PIR + LDR) = provável intrusão real
+def avaliar_ameaca():
+    movimento = ler_pir()
+    luz_anormal = ler_ldr()
+
+    if movimento and luz_anormal:
+        return ALERTA    # provável intrusão
+    elif movimento:
+        return AVISO     # possível falso positivo
+    else:
+        return None      # sem ameaça
 
 #Transição de estados
 def transitar(novo_estado):
@@ -60,25 +90,30 @@ def feedback_vigilancia():
 
 def feedback_desarmado():
     led_blue.off()
+    todos_leds_off()
     print("[IDS] Sistema desarmado.")
 
 #Interface pública para o orquestrador
 
 def armar():
-    """Chamado pelo orquestrador quando a autenticação 2FA é concluída."""
+    # Chamado pelo orquestrador quando a autenticação 2FA é concluída
     feedback_armando()
     calibrar_ldr()
     transitar(ARMANDO)
 
 def desarmar():
-    """Chamado pelo orquestrador no reset."""
+    # Chamado pelo orquestrador no reset
+    global anomalia_ativa, tempo_anomalia
+    anomalia_ativa = False
+    tempo_anomalia = 0
     led_blue.off()
     transitar(DESARMADO)
     feedback_desarmado()
 
 def atualizar():
-    """Chamado a cada iteração do loop principal.
-    Retorna True quando o IDS entra em LOCKDOWN (força re-autenticação)."""
+    # Chamado a cada iteração do loop principal
+    # Retorna True quando o IDS entra em LOCKDOWN (força re-autenticação)
+    global anomalia_ativa, tempo_anomalia
 
     # Countdown antes de ativar vigilância
     if estado_atual == ARMANDO:
@@ -86,8 +121,52 @@ def atualizar():
             feedback_vigilancia()
             transitar(VIGILANCIA)
 
-    # Vigilância ativa — detecção será implementada na próxima etapa
+    # Vigilância ativa — detecção multi-modal
     elif estado_atual == VIGILANCIA:
-        pass
+        ameaca = avaliar_ameaca()
+
+        if ameaca:
+            # Início de nova anomalia — registra timestamp
+            if not anomalia_ativa:
+                anomalia_ativa = True
+                tempo_anomalia = ticks_ms()
+                print(f"[IDS] Anomalia detectada: {ameaca}")
+
+            # Transita para o nível de ameaça detectado
+            if ameaca == ALERTA and estado_atual != ALERTA:
+                transitar(ALERTA)
+            elif ameaca == AVISO and estado_atual == VIGILANCIA:
+                transitar(AVISO)
+        else:
+            # Sem ameaça — volta para vigilância normal se estava em AVISO
+            if anomalia_ativa:
+                anomalia_ativa = False
+                tempo_anomalia = 0
+                print("[IDS] Anomalia cessou. Retornando a vigilancia.")
+                transitar(VIGILANCIA)
+
+    # Em AVISO — monitora se a ameaça persiste ou escala
+    elif estado_atual == AVISO:
+        ameaca = avaliar_ameaca()
+
+        if ameaca == ALERTA:
+            print("[IDS] Ameaca escalou: movimento + luz anormal")
+            transitar(ALERTA)
+        elif not ameaca:
+            # Ameaça cessou — volta para vigilância
+            anomalia_ativa = False
+            tempo_anomalia = 0
+            print("[IDS] Ameaca cessou. Retornando a vigilancia.")
+            transitar(VIGILANCIA)
+
+    # Em ALERTA — escalação para CRITICO será implementada na etapa 6
+    elif estado_atual == ALERTA:
+        ameaca = avaliar_ameaca()
+
+        if not ameaca:
+            anomalia_ativa = False
+            tempo_anomalia = 0
+            print("[IDS] Ameaca cessou. Retornando a vigilancia.")
+            transitar(VIGILANCIA)
 
     return False
