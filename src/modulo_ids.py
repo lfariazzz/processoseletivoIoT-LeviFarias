@@ -15,6 +15,8 @@ led_blue   = Pin(5, Pin.OUT)
 #Constantes
 TEMPO_ARMANDO_MS   = 3000   # countdown antes de ativar vigilância (3 segundos)
 LIMIAR_LDR_PERCENT = 30     # variação percentual do LDR para detectar anomalia
+TEMPO_ESCALACAO_MS = 5000   # tempo em ALERTA antes de escalar para CRITICO (5 segundos)
+TEMPO_LOCKDOWN_MS  = 10000  # tempo em CRITICO antes de LOCKDOWN (10 segundos)
 
 #Estados
 DESARMADO   = "DESARMADO"
@@ -31,6 +33,7 @@ tempo_inicio      = 0
 ldr_baseline      = 0
 tempo_anomalia    = 0     # quando a anomalia começou (para escalação)
 anomalia_ativa    = False # se há anomalia em curso
+ultimo_feedback   = 0     # último momento que feedback foi emitido (evita flood)
 
 #Calibração do LDR — lê 10 amostras e calcula a média como referência
 def calibrar_ldr():
@@ -91,7 +94,39 @@ def feedback_vigilancia():
 def feedback_desarmado():
     led_blue.off()
     todos_leds_off()
+    buzzer.duty(0)
     print("[IDS] Sistema desarmado.")
+
+# Feedback não-bloqueante por nível de ameaça
+# Usa temporização para alternar LEDs sem travar o loop
+def feedback_aviso():
+    # LED amarelo pisca + beep curto
+    todos_leds_off()
+    led_blue.on()
+    led_yellow.on()
+    beep(50, 800)
+
+def feedback_alerta():
+    # LED vermelho pisca + buzzer intermitente
+    todos_leds_off()
+    led_blue.on()
+    led_red.on()
+    buzzer.freq(600)
+    buzzer.duty(512)
+
+def feedback_critico():
+    # LED vermelho fixo + buzzer contínuo agudo
+    todos_leds_off()
+    led_blue.on()
+    led_red.on()
+    led_yellow.on()
+    buzzer.freq(1000)
+    buzzer.duty(512)
+
+def parar_alarme():
+    buzzer.duty(0)
+    todos_leds_off()
+    led_blue.on()
 
 #Interface pública para o orquestrador
 
@@ -103,17 +138,19 @@ def armar():
 
 def desarmar():
     # Chamado pelo orquestrador no reset
-    global anomalia_ativa, tempo_anomalia
+    global anomalia_ativa, tempo_anomalia, ultimo_feedback
     anomalia_ativa = False
     tempo_anomalia = 0
+    ultimo_feedback = 0
     led_blue.off()
+    buzzer.duty(0)
     transitar(DESARMADO)
     feedback_desarmado()
 
 def atualizar():
     # Chamado a cada iteração do loop principal
     # Retorna True quando o IDS entra em LOCKDOWN (força re-autenticação)
-    global anomalia_ativa, tempo_anomalia
+    global anomalia_ativa, tempo_anomalia, ultimo_feedback
 
     # Countdown antes de ativar vigilância
     if estado_atual == ARMANDO:
@@ -149,23 +186,63 @@ def atualizar():
     elif estado_atual == AVISO:
         ameaca = avaliar_ameaca()
 
+        # Feedback periódico (a cada 500ms para não travar)
+        if ticks_diff(ticks_ms(), ultimo_feedback) > 500:
+            feedback_aviso()
+            ultimo_feedback = ticks_ms()
+
         if ameaca == ALERTA:
             print("[IDS] Ameaca escalou: movimento + luz anormal")
+            feedback_alerta()
             transitar(ALERTA)
         elif not ameaca:
-            # Ameaça cessou — volta para vigilância
             anomalia_ativa = False
             tempo_anomalia = 0
+            parar_alarme()
             print("[IDS] Ameaca cessou. Retornando a vigilancia.")
             transitar(VIGILANCIA)
 
-    # Em ALERTA — escalação para CRITICO será implementada na etapa 6
+    # Em ALERTA — escalação temporal para CRITICO após 5s
     elif estado_atual == ALERTA:
         ameaca = avaliar_ameaca()
 
+        # Feedback periódico
+        if ticks_diff(ticks_ms(), ultimo_feedback) > 300:
+            feedback_alerta()
+            ultimo_feedback = ticks_ms()
+
+        # Escalação: ALERTA persistente > 5s → CRITICO
+        if anomalia_ativa and ticks_diff(ticks_ms(), tempo_anomalia) > TEMPO_ESCALACAO_MS:
+            print("[IDS] Ameaca persistente! Escalando para CRITICO.")
+            print("[IDS] !!! INTRUSAO CONFIRMADA !!!")
+            feedback_critico()
+            transitar(CRITICO)
+        elif not ameaca:
+            anomalia_ativa = False
+            tempo_anomalia = 0
+            parar_alarme()
+            print("[IDS] Ameaca cessou. Retornando a vigilancia.")
+            transitar(VIGILANCIA)
+
+    # Em CRITICO — escalação para LOCKDOWN após 10s
+    elif estado_atual == CRITICO:
+        # Feedback contínuo
+        if ticks_diff(ticks_ms(), ultimo_feedback) > 200:
+            feedback_critico()
+            ultimo_feedback = ticks_ms()
+
+        # Escalação: CRITICO persistente > 10s → LOCKDOWN
+        if ticks_diff(ticks_ms(), tempo_anomalia) > TEMPO_LOCKDOWN_MS:
+            print("[IDS] LOCKDOWN ATIVADO! Re-autenticacao necessaria.")
+            buzzer.duty(0)
+            transitar(LOCKDOWN)
+            return True
+
+        ameaca = avaliar_ameaca()
         if not ameaca:
             anomalia_ativa = False
             tempo_anomalia = 0
+            parar_alarme()
             print("[IDS] Ameaca cessou. Retornando a vigilancia.")
             transitar(VIGILANCIA)
 
