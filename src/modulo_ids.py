@@ -133,6 +133,10 @@ def parar_alarme():
 
 def armar():
     # Chamado pelo orquestrador quando a autenticação 2FA é concluída
+    global anomalia_ativa, tempo_anomalia, ultimo_feedback
+    anomalia_ativa = False
+    tempo_anomalia = 0
+    ultimo_feedback = 0
     log.registrar("IDS_ARMADO")
     feedback_armando()
     calibrar_ldr()
@@ -230,6 +234,20 @@ def atualizar():
             parar_alarme()
             print("[IDS] Ameaca cessou. Retornando a vigilancia.")
             transitar(VIGILANCIA)
+
+    # Em LOCKDOWN — aguarda re-autenticação; pisca vermelho/amarelo
+    elif estado_atual == LOCKDOWN:
+        agora = ticks_ms()
+        if ticks_diff(agora, ultimo_feedback) > 500:
+            led_green.off()
+            led_blue.off()
+            if led_red.value():
+                led_red.off()
+                led_yellow.on()
+            else:
+                led_yellow.off()
+                led_red.on()
+            ultimo_feedback = agora
 
     # Em CRITICO — escalação para LOCKDOWN após 10s
     elif estado_atual == CRITICO:
