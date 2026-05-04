@@ -11,96 +11,113 @@
 
 ## 1️⃣ Visão Geral da Solução
 
-O projeto simula um **painel de autenticação de dois fatores (2FA)** para controle de acesso físico, semelhante aos sistemas utilizados em datacenters, salas de servidor e laboratórios de TI.
+O projeto simula um sistema de segurança física em duas camadas: autenticação por dois fatores (2FA) para controle de acesso e detecção de intrusão (IDS) para monitorar o ambiente após a entrada. O desenvolvimento ocorreu em duas fases — a primeira entregou o módulo 2FA isolado; a segunda expandiu para um sistema integrado com IDS, orquestrador e registro de eventos.
 
-O sistema exige que o usuário apresente dois fatores de autenticação em sequência dentro de um intervalo de tempo. Caso o usuário falhe repetidamente, o sistema aplica um bloqueio temporário como proteção contra ataques de força bruta.
-
-O usuário interage com o sistema através de dois botões de autenticação (F1 e F2) e um botão de reset (RST). O feedback é fornecido visualmente via LEDs coloridos e sonoramente via buzzer.
+O usuário interage com o sistema via dois botões de autenticação (F1 e F2) e um botão de reset (RST). O feedback é dado por LEDs coloridos e buzzer.
 
 ---
 
 ## 2️⃣ Arquitetura do Sistema Embarcado
 
-### Fluxo principal
+### Fase 1 — até 27/04 | Módulo 2FA standalone
 
-O programa inicializa os periféricos, registra as interrupções dos botões e entra no loop principal, onde a máquina de estados é executada continuamente.
-
-A detecção dos botões utiliza **IRQ (interrupção por hardware)** com trigger `IRQ_FALLING` — garantindo que nenhum clique seja perdido independentemente da velocidade do loop. Flags booleanas são setadas nas ISRs e processadas no loop principal.
-
-A temporização utiliza `ticks_ms()` e `ticks_diff()` — abordagem **não-bloqueante** que permite ao sistema monitorar múltiplos temporizadores simultaneamente sem travar o loop.
-
-### Máquina de estados
+O módulo implementa uma máquina de estados com proteção contra força bruta:
 
 ```
 IDLE → FATOR1 → APROVADO → IDLE
               → EXPIRADO → IDLE
-              → BLOQUEADO → IDLE (após 10s)
+              → BLOQUEADO → IDLE  (desbloqueio automático após 10s)
 ```
 
-| Estado | Condição de entrada | Condição de saída |
-|---|---|---|
-| IDLE | Inicialização ou reset | F1 pressionado |
-| FATOR1 | F1 pressionado | F2 pressionado (→ APROVADO) ou timeout 5s (→ EXPIRADO) |
-| APROVADO | F2 pressionado corretamente | 3 segundos |
-| EXPIRADO | Timeout do fator 2 | 2 segundos |
-| BLOQUEADO | 3 tentativas falhas | 10 segundos |
+F1 inicia a autenticação; F2 precisa ser pressionado dentro de 5 segundos. Três falhas consecutivas travam o sistema. O contador de tentativas só é zerado após reset manual ou desbloqueio automático — não após um sucesso — para impedir que tentativas intercaladas com acertos anulem a proteção.
 
-### Temporização não-bloqueante
+### Fase 2 — até 04/05 | Sistema completo com IDS
 
-```python
-# Em vez de sleep(5) que trava tudo:
-if ticks_diff(ticks_ms(), tempo_inicio) > TIMEOUT_F2_MS:
-    # ação após 5 segundos
+O código foi reorganizado em quatro módulos com responsabilidades claras:
+
+```
+main.py  ←  orquestrador
+├── modulo_2fa.py   — autenticação, sinaliza conclusão
+├── modulo_ids.py   — vigilância, sinaliza lockdown
+├── log.py          — registro de eventos com timestamp
+└── utils.py        — hardware compartilhado
+```
+
+O `main.py` não contém lógica de negócio: despacha eventos de botão e reage ao que os módulos retornam. O IDS é armado automaticamente quando o 2FA conclui; se o IDS entra em lockdown, o 2FA é resetado forçando nova autenticação.
+
+```
+[F1/F2/RST] → main.py → modulo_2fa → retorna "autenticado"
+                                ↓
+                         modulo_ids.armar()
+                                ↓ retorna "lockdown"
+                         modulo_2fa.on_reset()
+```
+
+O módulo IDS implementa escalação progressiva de ameaças:
+
+```
+DESARMADO → ARMANDO (3s) → VIGILANCIA
+                                ↓ PIR ativo
+                              AVISO → VIGILANCIA (ameaça cessa)
+                                ↓ PIR + LDR simultâneos
+                              ALERTA → VIGILANCIA (ameaça cessa)
+                                ↓ persistente > 5s
+                              CRITICO
+                                ↓ persistente > 10s
+                              LOCKDOWN → força re-autenticação
 ```
 
 ---
 
 ## 3️⃣ Componentes Utilizados na Simulação
 
-| Componente | GPIO | Tipo | Função |
-|---|---|---|---|
-| LED Verde | GPIO21 | Saída digital | Acesso autorizado |
-| LED Vermelho | GPIO19 | Saída digital | Acesso negado / sistema bloqueado |
-| LED Amarelo | GPIO18 | Saída digital | Aguardando fator 2 |
-| Botão F1 | GPIO13 | Entrada (PULL_UP) | Primeiro fator de autenticação |
-| Botão F2 | GPIO12 | Entrada (PULL_UP) | Segundo fator de autenticação |
-| Botão RST | GPIO14 | Entrada (PULL_UP) | Reset manual do sistema |
-| Buzzer | GPIO26 | PWM | Feedback sonoro de alerta |
-
 **Placa:** ESP32 DevKit C V4 com MicroPython
+
+| Componente | GPIO | Módulo | Função |
+|---|---|---|---|
+| LED Verde | GPIO21 | 2FA | Acesso autorizado |
+| LED Vermelho | GPIO19 | 2FA / IDS | Acesso negado / alerta |
+| LED Amarelo | GPIO18 | 2FA / IDS | Aguardando fator 2 / aviso |
+| LED Azul | GPIO5 | IDS | Vigilância ativa |
+| Botão F1 | GPIO13 | 2FA | Primeiro fator |
+| Botão F2 | GPIO12 | 2FA | Segundo fator |
+| Botão RST | GPIO14 | Orquestrador | Reset geral |
+| Buzzer | GPIO26 | 2FA / IDS | Feedback sonoro (PWM) |
+| Sensor PIR | GPIO27 | IDS | Detecção de movimento |
+| Sensor LDR | GPIO34 (ADC) | IDS | Detecção de variação de luz |
 
 ---
 
 ## 4️⃣ Decisões Técnicas Relevantes
 
-**IRQ ao invés de polling:** A detecção de botões utiliza interrupções por hardware (`Pin.IRQ_FALLING`) em vez de verificação contínua no loop. Isso garante que nenhum clique seja perdido e reduz o custo computacional do loop principal.
+**Padrão orquestrador com módulos independentes:** A alternativa seria um único arquivo monolítico. A opção modular foi tomada já na Fase 1 — e foi o que tornou possível adicionar o IDS na Fase 2 sem tocar no código do 2FA. Cada módulo expõe apenas três funções públicas e não conhece a existência do outro; o orquestrador é o único ponto de integração.
 
-**Temporização não-bloqueante:** O uso de `ticks_ms()` e `ticks_diff()` permite que múltiplos temporizadores rodem em paralelo — timeout do fator 2, tempo de bloqueio e tempo de exibição do resultado — sem que um bloqueie o outro.
+**Interrupção por hardware (IRQ) nos botões:** Polling no Wokwi apresentou cliques perdidos porque o loop principal é mais lento que a interação do usuário. IRQ garante que cada acionamento seja registrado como uma flag booleana, processada na próxima iteração do loop, independente da velocidade de execução.
 
-**Contador de tentativas persistente:** O contador só é zerado após reset manual (RST) ou após o desbloqueio automático — não após autenticação bem-sucedida. Isso garante que tentativas de força bruta intercaladas com sucessos não resetem a proteção.
+**Temporização não-bloqueante com `ticks_ms()`:** `sleep()` travaria o loop inteiro durante cada espera — impossível manter múltiplos temporizadores simultâneos (timeout do 2FA, escalação do IDS, feedback periódico de LEDs). `ticks_ms()` + `ticks_diff()` permitem verificar cada timer a cada iteração sem bloquear os demais.
 
-**Feedback multimodal:** Cada estado tem feedback visual (LED) e sonoro (buzzer) distintos, facilitando a identificação do estado mesmo sem acesso ao Serial Monitor — comportamento esperado em sistemas embarcados reais.
+**Fusão de sensores PIR + LDR:** PIR isolado gera falsos positivos com facilidade (correntes de ar, variações de temperatura). LDR isolado não detecta presença em ambientes com iluminação estável. A combinação dos dois eleva a confiança da detecção: apenas quando ambos disparam simultaneamente o sistema classifica como ALERTA. Movimento isolado gera apenas AVISO, com retorno automático à vigilância se a ameaça cessar.
+
+**Calibração dinâmica do LDR:** O threshold de luminosidade não está fixo em código — é calculado como média de 10 leituras no momento exato em que o IDS é armado. Um valor fixo falharia em ambientes com iluminação diferente da esperada; calibrar no momento do arme adapta o sistema às condições reais sem custo extra.
+
+**Buffer circular no log:** Uma lista sem limite cresceria indefinidamente em memória — em MicroPython no ESP32, isso resulta em `MemoryError` em sessões longas. O limite de 20 entradas garante que o sistema nunca falhe por falta de memória, descartando os eventos mais antigos quando o buffer enche.
 
 ---
 
 ## 5️⃣ Resultados Obtidos
 
-O sistema funciona corretamente na simulação Wokwi:
+**Fase 1 — módulo 2FA:** O sistema autenticou corretamente em todos os cenários testados: sucesso (F1 → F2 em até 5s), timeout (sem F2 em 5s) e bloqueio após três falhas consecutivas com desbloqueio automático em 10s. A janela de 5 segundos se mostrou adequada — confortável para interação humana e curta o suficiente para que tentativas automatizadas não consigam preparar uma resposta entre os dois fatores.
 
-- **Autenticação bem-sucedida:** F1 → F2 dentro de 5s → LED verde + "ACESSO AUTORIZADO"
-- **Timeout:** F1 → aguarda 5s sem F2 → LED vermelho + "ACESSO NEGADO"
-- **Bloqueio:** 3 timeouts consecutivos → LED vermelho fixo + buzzer contínuo + "SISTEMA BLOQUEADO"
-- **Desbloqueio automático:** após 10s → "Sistema desbloqueado"
-- **Reset manual:** RST a qualquer momento → retorno imediato ao IDLE
+**Fase 2 — sistema completo:** A cadeia de escalação funcionou conforme projetado. O ponto mais importante observado foi a interação entre o threshold de 30% do LDR e o timer de 5 segundos para escalar de ALERTA para CRITICO: uma variação de luz passageira (sombra, reflexo) não aciona o lockdown porque a anomalia precisa ser sustentada. Uma intrusão real — movimento contínuo com variação de luz persistente — atingiu LOCKDOWN de forma consistente nos testes. O log foi impresso corretamente no Serial Monitor ao entrar em lockdown, com os eventos de cada módulo em ordem cronológica.
 
-O pipeline de CI/CD executa com sucesso — o GitHub Actions builda o firmware via Docker, gera o `fs.bin` e valida a simulação via Wokwi CLI.
+O pipeline de CI/CD executa sem falhas — o GitHub Actions builda o firmware via Docker, gera o `fs.bin` e valida a simulação via Wokwi CLI.
 
 ---
 
 ## 6️⃣ Comentários Adicionais
 
-**Dificuldades encontradas:** A configuração correta dos pinos no `diagram.json` para o `board-esp32-devkit-c-v4` exigiu iteração — o formato correto usa números simples (`esp:21`) ao invés de prefixos (`esp:GPIO21`). A detecção de botões via polling no loop principal não funcionou adequadamente no Wokwi, sendo necessário migrar para IRQ.
+**Dificuldades:** A configuração dos pinos no `diagram.json` exigiu iteração — o Wokwi usa `esp:21` e não `esp:GPIO21`. O feedback periódico nos estados de alerta do IDS (LEDs piscando, buzzer intermitente) inicialmente travava o loop; a solução foi aplicar a mesma lógica de `ticks_ms()` usada nos timers de estado.
 
-**Limitações:** O sistema simula 2FA com dois botões físicos — em produção, os fatores seriam tecnologias distintas como RFID + PIN ou biometria + token. O tempo de bloqueio de 10 segundos é adequado para demonstração mas seria maior em ambiente real.
+**Limitações:** O buffer de 20 eventos no log pode ser insuficiente em sessões com muitas tentativas de autenticação — eventos iniciais seriam descartados, o que comprometeria uma análise forense completa. Mais importante: PIR e LDR compartilham uma vulnerabilidade fundamental — ambos detectam presença pelos mesmos fenômenos físicos. Um sistema real precisaria de modalidades adicionais (sensor térmico, vibração) para cobrir vetores de ataque que os dois não capturam.
 
-**Aprendizados:** O projeto evidenciou a importância da temporização não-bloqueante em sistemas embarcados — `sleep()` trava o sistema inteiro, enquanto `ticks_ms()` permite múltiplas tarefas simultâneas. A máquina de estados se mostrou essencial para manter o comportamento previsível e auditável do sistema.
+**Aprendizado principal:** A decisão de modularizar o código desde a Fase 1 — quando só existia o 2FA — foi validada diretamente pela Fase 2. O IDS foi integrado sem nenhuma alteração no módulo de autenticação. Isso confirmou na prática que pensar na extensibilidade da arquitetura antes de precisar dela tem valor concreto, não apenas teórico.
